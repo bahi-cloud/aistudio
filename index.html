@@ -47,6 +47,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
 .ma{display:flex;gap:4px;margin-top:5px;opacity:.5}.ma:hover{opacity:1}
 .ma button{background:none;border:1px solid transparent;border-radius:8px;color:var(--mu);font-size:11px;padding:2px 9px}
 .ma button:hover{background:var(--s2);border-color:var(--bd);color:var(--tx)}
+@keyframes pl{50%{opacity:.45}}#mic.on{color:var(--er);border-color:var(--er);animation:pl 1.2s infinite}
 .spb.on{color:var(--ac)!important}#spk.on{color:var(--ac);border-color:var(--ac)}
 .cw{margin:10px 0;border:1px solid var(--bd);border-radius:12px;overflow:hidden;background:var(--code)}
 .ch{display:flex;justify-content:space-between;align-items:center;padding:5px 12px;background:var(--s2);font-size:11px;color:var(--mu);direction:ltr}
@@ -172,7 +173,7 @@ code.in{background:var(--s2);padding:1px 6px;border-radius:6px;font-size:.9em;di
      <div id="al"></div>
     </div></div>
    </div>
-   <span id="tc"></span><div class="sp"></div>
+   <span id="tc"></span><button class="ib" id="mic" onclick="toggleMic()" title="تفريغ صوتي">🎤</button><div class="sp"></div>
    <button id="stp" onclick="ctl&&ctl.abort()">■</button><button id="snd" onclick="sendMsg()">↑</button>
   </div>
  </div></div>
@@ -200,6 +201,7 @@ code.in{background:var(--s2);padding:1px 6px;border-radius:6px;font-size:.9em;di
   <div class="fd"><label>Temperature</label><input id="cTemp" type="number" step="0.1" placeholder="1.0"></div>
   <div class="fd"><label>Max Tokens</label><input id="cMax" type="number" placeholder="auto"></div>
   <div class="fd"><label>Top P</label><input id="cTop" type="number" step="0.05" placeholder="1.0"></div></div>
+  <div class="fd"><label>لغة التفريغ الصوتي</label><select id="cStt"><option value="ar-SA">العربية (الفصحى)</option><option value="ar-MA">العربية (المغرب)</option><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
   <div class="row" style="margin:0"><span>متابعة تلقائية عند انقطاع الرد الطويل</span><label class="sw"><input type="checkbox" id="cCont" checked><span class="sl"></span></label></div>
  </div>
  <button class="btn" style="width:100%" onclick="saveSet()">💾 حفظ</button>
@@ -222,7 +224,7 @@ const LS='ai_studio_v7',$=i=>document.getElementById(i);
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const hash=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36)};
 const J=o=>JSON.stringify(o);
-let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://ayb-bh92-mcp.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
+let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,sttLang:'ar-SA',theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://ayb-bh92-mcp.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
 let S=[],cid=null,tools=[],files=[],busy=false,ctl=null,curArt=null,testTool=null,pend=null,poll=null;
 const cur=()=>S.find(s=>s.id===cid);
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('toasts').appendChild(d);setTimeout(()=>d.remove(),2800)}
@@ -387,12 +389,12 @@ function loadAll(){
  if(cfg.backend.url==='https://ayb-bh92-tools.hf.space'){cfg.backend.url='https://ayb-bh92-mcp.hf.space';cfg.backend.list=null;cfg.backend.execV2=null}
  if(!cfg.composioUserId)cfg.composioUserId='u_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
  $('cBase').value=cfg.baseUrl;$('cKey').value=cfg.apiKey;$('cAuth').value=cfg.authType||'bearer';$('cTools').value=cfg.backend.url;$('cBeA').value=cfg.backend.authType||'none';$('cBeK').value=cfg.backend.authKey||'';
- $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;
+ $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;$('cStt').value=cfg.sttLang||'ar-SA';
  applyTheme();updSpk();renderModels();renderSessions();renderApps();S.length?openSession(S[0].id):newChat();loadTools(false);cRefresh(false);
 }
 function saveSet(){
  cfg.baseUrl=$('cBase').value.trim();cfg.apiKey=$('cKey').value.trim();cfg.authType=$('cAuth').value;cfg.proxyMode=$('cProxy').checked;
- cfg.sysPrompt=$('cSys').value;cfg.temp=$('cTemp').value;cfg.maxTok=$('cMax').value;cfg.topP=$('cTop').value;cfg.autoCont=$('cCont').checked;cfg.chatPath=null;
+ cfg.sysPrompt=$('cSys').value;cfg.temp=$('cTemp').value;cfg.maxTok=$('cMax').value;cfg.topP=$('cTop').value;cfg.autoCont=$('cCont').checked;cfg.sttLang=$('cStt').value;cfg.chatPath=null;
  const u=$('cTools').value.trim().replace(/\/+$/,''),at=$('cBeA').value,ak=$('cBeK').value.trim();
  if(u!==cfg.backend.url||at!==cfg.backend.authType||ak!==cfg.backend.authKey){cfg.backend={url:u,authType:at,authKey:ak,list:null,execV2:null};loadTools(false)}
  const cm=$('cCust').value.trim();if(cm){if(!cfg.models.includes(cm))cfg.models.push(cm);cfg.model=cm;$('cCust').value=''}
@@ -516,6 +518,24 @@ function toggleAuto(){
  toast(cfg.autoSpeak?'🔊 النطق التلقائي مفعّل':'🔇 النطق التلقائي معطّل');
 }
 
+/* ---- التفريغ الصوتي (Web Speech API في المتصفح) ---- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,micOn=false,micBase='';
+function micUI(){const b=$('mic');b.classList.toggle('on',micOn);b.textContent=micOn?'⏹':'🎤';b.title=micOn?'إيقاف التفريغ':'تفريغ صوتي'}
+function stopMic(){micOn=false;try{rec&&rec.stop()}catch{}micUI()}
+function micStart(){
+ micBase=$('inp').value;if(micBase&&!/\s$/.test(micBase))micBase+=' ';
+ rec=new SR();rec.lang=cfg.sttLang||'ar-SA';rec.continuous=true;rec.interimResults=true;
+ rec.onresult=e=>{if(!micOn)return;let f='',t='';for(let i=0;i<e.results.length;i++){const r=e.results[i];if(r.isFinal)f+=r[0].transcript;else t+=r[0].transcript}$('inp').value=micBase+f+t;$('inp').dispatchEvent(new Event('input'))};
+ rec.onerror=e=>{if(e.error==='no-speech'||e.error==='aborted')return;micOn=false;micUI();toast(e.error==='not-allowed'||e.error==='service-not-allowed'?'❌ اسمح للمتصفح باستخدام الميكروفون':'❌ خطأ التفريغ: '+e.error)};
+ rec.onend=()=>{if(micOn){try{micStart()}catch{micOn=false;micUI()}}else micUI()};
+ rec.start();
+}
+function toggleMic(){
+ if(!SR)return toast('⚠️ المتصفح لا يدعم التفريغ الصوتي (استخدم Chrome أو Edge)');
+ if(micOn)return stopMic();
+ ttsStop();micOn=true;micUI();try{micStart()}catch(e){micOn=false;micUI();toast('❌ '+e.message)}
+}
+
 /* ---- agent ---- */
 const BASE_SYS=`أنت وكيل برمجي ومساعد دقيق. القواعد:
 - عند كتابة كود: اكتبه كاملاً وجاهزاً للتشغيل دون اختصار أو "..." أو "بقية الكود كما هو" أو أي placeholder، حتى لو طال. ضع كل ملف في كتلة كود مستقلة. إن انقطع ردك سيُطلب منك المتابعة: أكمل من الحرف الذي توقفت عنده تماماً دون تكرار أو مقدمة.
@@ -539,7 +559,7 @@ function newBox(){
 }
 function setBusy(v){busy=v;$('snd').style.display=v?'none':'block';$('stp').style.display=v?'block':'none'}
 async function sendMsg(){
- if(busy)return;const text=$('inp').value.trim();if(!text&&!files.length)return;
+ if(busy)return;if(micOn)stopMic();const text=$('inp').value.trim();if(!text&&!files.length)return;
  if(files.some(f=>f.up))return toast('⏳ انتظر اكتمال الرفع');
  if(!cfg.model||(!cfg.proxyMode&&!cfg.baseUrl)){openSet();return toast('⚠️ أكمل إعداد المزوّد')}
  const s=cur();if(!s.messages.length){s.title=text.slice(0,40)||'ملفات مرفقة';renderSessions()}
@@ -587,7 +607,7 @@ async function agentLoop(s,box){
    calls.forEach((tc,i)=>s.messages.push({role:'tool',tool_call_id:tc.id,content:res[i]}));persist();continue;
   }
   if(!full){box.step('⚠','bad','لم يصل رد من النموذج');return}
-  s.messages.push({role:'assistant',content:full});finalize(ui,full,s,true);box.step('✓','ok','اكتمل الرد');if(cfg.autoSpeak)ttsSpeak(full,ui.el&&ui.el.querySelector('.spb'));return;
+  s.messages.push({role:'assistant',content:full});finalize(ui,full,s,true);box.step('✓','ok','اكتمل الرد');if(cfg.autoSpeak&&!micOn)ttsSpeak(full,ui.el&&ui.el.querySelector('.spb'));return;
  }
  box.step('⚠','bad','بلغت الحلقة الحد الأقصى دون رد نهائي');
 }
