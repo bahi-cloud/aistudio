@@ -270,7 +270,7 @@ file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/
 const svg=(n,z=18)=>`<svg width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n]||''}</svg>`;
 const hydrate=()=>document.querySelectorAll('[data-i]').forEach(e=>e.innerHTML=svg(e.dataset.i,+e.dataset.z||18));
 
-let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,sttLang:'ar-SA',ttsRate:1.5,ttsVoice:'',vad:true,barge:false,sttEngine:'auto',whisperModel:'Xenova/whisper-base',theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://ayb-bh92-mcp.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
+let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,sttLang:'ar-SA',ttsRate:1.5,ttsVoice:'',vad:true,barge:false,sttEngine:'auto',whisperModel:'Xenova/whisper-base',theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://bahi-bh-test-ckod.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
 let S=[],cid=null,tools=[],files=[],busy=false,ctl=null,curArt=null,testTool=null,pend=null,poll=null;
 const cur=()=>S.find(s=>s.id===cid);
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('toasts').appendChild(d);setTimeout(()=>d.remove(),Math.max(2800,t.length*85))}
