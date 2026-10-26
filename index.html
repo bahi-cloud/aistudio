@@ -456,7 +456,27 @@ function loadAll(){
  $('cBase').value=cfg.baseUrl;$('cKey').value=cfg.apiKey;$('cAuth').value=cfg.authType||'bearer';$('cTools').value=cfg.backend.url;$('cBeA').value=cfg.backend.authType||'none';$('cBeK').value=cfg.backend.authKey||'';
  $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;$('cStt').value=cfg.sttLang||'ar-SA';$('cRate').value=cfg.ttsRate||1.5;$('rV').textContent=$('cRate').value;$('cVad').checked=cfg.vad!==false;$('cBarge').checked=!!cfg.barge;fillVoices();$('cEng').value=cfg.sttEngine||'auto';$('cWm').value=cfg.whisperModel||'Xenova/whisper-base';
  applyTheme();updSpk();renderModels();renderSessions();renderApps();S.length?openSession(S[0].id):newChat();loadTools(false);cRefresh(false);
+
+ // ★ مزامنة دورية مع السيرفر كل 20 ثانية
+ setInterval(async () => {
+     try {
+         const res = await callTool('composio_list_connected_tools', {});
+         const accounts = res?.connected_tools || [];
+         let changed = false;
+         APPS.forEach(([id]) => {
+             const isConnected = accounts.some(a =>
+                 (a.slug === id || a.toolkit === id) && a.status === 'ACTIVE'
+             );
+             if (apSt(id).connected !== isConnected) {
+                 apSt(id).connected = isConnected;
+                 changed = true;
+             }
+         });
+         if (changed) { persist(); renderApps(); updCount(); }
+     } catch(e) {}
+ }, 20000);
 }
+
 function saveSet(){
  cfg.baseUrl=$('cBase').value.trim();cfg.apiKey=$('cKey').value.trim();cfg.authType=$('cAuth').value;cfg.proxyMode=$('cProxy').checked;
  cfg.sysPrompt=$('cSys').value;cfg.temp=$('cTemp').value;cfg.maxTok=$('cMax').value;cfg.topP=$('cTop').value;cfg.autoCont=$('cCont').checked;cfg.sttLang=$('cStt').value;cfg.ttsRate=parseFloat($('cRate').value)||1.5;cfg.ttsVoice=$('cVoice').value;cfg.vad=$('cVad').checked;cfg.barge=$('cBarge').checked;cfg.sttEngine=$('cEng').value;if(cfg.whisperModel!==$('cWm').value){cfg.whisperModel=$('cWm').value;W.loading=null;try{W.w&&W.w.terminate()}catch{}W.w=null}cfg.chatPath=null;
