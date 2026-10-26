@@ -221,6 +221,8 @@ code.in{background:var(--s2);padding:1px 6px;border-radius:6px;font-size:.9em;di
   <div class="fd"><label>Max Tokens</label><input id="cMax" type="number" placeholder="auto"></div>
   <div class="fd"><label>Top P</label><input id="cTop" type="number" step="0.05" placeholder="1.0"></div></div>
   <div class="fd"><label>لغة التفريغ الصوتي</label><select id="cStt"><option value="ar-SA">العربية (الفصحى)</option><option value="ar-MA">العربية (المغرب)</option><option value="en-US">English</option><option value="fr-FR">Français</option></select></div>
+  <div class="fd"><label>محرك التفريغ الصوتي</label><select id="cEng"><option value="auto">تلقائي (المتصفح ثم Whisper المحلي)</option><option value="browser">المتصفح فقط</option><option value="whisper">Whisper المحلي فقط (يعمل في Brave)</option></select></div>
+  <div class="fd"><label>نموذج Whisper (يُحمَّل مرة واحدة)</label><select id="cWm"><option value="Xenova/whisper-tiny">tiny — سريع (~40MB)، دقة عربية ضعيفة</option><option value="Xenova/whisper-base">base — متوازن (~75MB)</option><option value="Xenova/whisper-small">small — أدق وأثقل (~250MB)</option></select></div>
   <div class="fd"><label>سرعة النطق: <b id="rV">1.5</b>×</label><input id="cRate" type="range" min="0.8" max="2" step="0.1" oninput="$('rV').textContent=this.value"></div>
   <div class="fd"><label>صوت النطق</label><select id="cVoice"></select></div>
   <button class="btn g" style="width:100%;margin-bottom:9px" onclick="testVoice()">اختبار الصوت</button>
@@ -233,7 +235,8 @@ code.in{background:var(--s2);padding:1px 6px;border-radius:6px;font-size:.9em;di
 
 <div id="dg" class="md" onclick="if(event.target===this)this.classList.remove('open')"><div class="card">
  <h2><i data-i="pulse"></i> التشخيص <span><button class="btn g" style="padding:6px 11px;font-size:11px" onclick="copyDiag()">نسخ</button> <button class="ib" onclick="$('dg').classList.remove('open')"><i data-i="x"></i></button></span></h2>
- <div style="font-size:11px;color:var(--mu);margin-bottom:9px">القائمة: <b id="dgL">—</b> · التنفيذ: <b id="dgE">—</b></div><div id="dgB"></div>
+ <div style="font-size:11px;color:var(--mu);margin-bottom:9px">القائمة: <b id="dgL">—</b> · التنفيذ: <b id="dgE">—</b></div><button class="btn g" style="width:100%;margin-bottom:9px" onclick="micTest()">اختبار الميكروفون خطوة بخطوة</button>
+ <pre id="mtR" style="direction:ltr;text-align:left;white-space:pre-wrap;font-size:11px;margin-bottom:9px;color:var(--mu)"></pre><div id="dgB"></div>
 </div></div>
 
 <div id="tm" class="md" onclick="if(event.target===this)this.classList.remove('open')"><div class="card">
@@ -267,10 +270,10 @@ file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/
 const svg=(n,z=18)=>`<svg width="${z}" height="${z}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n]||''}</svg>`;
 const hydrate=()=>document.querySelectorAll('[data-i]').forEach(e=>e.innerHTML=svg(e.dataset.i,+e.dataset.z||18));
 
-let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,sttLang:'ar-SA',ttsRate:1.5,ttsVoice:'',vad:true,barge:false,theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://ayb-bh92-mcp.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
+let cfg={baseUrl:'',apiKey:'',authType:'bearer',model:'',models:[],sysPrompt:'',temp:'',maxTok:'',topP:'',autoCont:true,autoSpeak:false,sttLang:'ar-SA',ttsRate:1.5,ttsVoice:'',vad:true,barge:false,sttEngine:'auto',whisperModel:'Xenova/whisper-base',theme:'dark',composio:{},composioUserId:'',chatPath:null,proxyMode:false,enabledToolNames:[],backend:{url:'https://ayb-bh92-mcp.hf.space',authType:'none',authKey:'',list:null,execV2:null}};
 let S=[],cid=null,tools=[],files=[],busy=false,ctl=null,curArt=null,testTool=null,pend=null,poll=null;
 const cur=()=>S.find(s=>s.id===cid);
-function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('toasts').appendChild(d);setTimeout(()=>d.remove(),2800)}
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;$('toasts').appendChild(d);setTimeout(()=>d.remove(),Math.max(2800,t.length*85))}
 
 /* ---- storage: يحفظ نسخة مقلَّصة فقط ولا يمسّ الحالة الحيّة ---- */
 function persist(){
@@ -355,7 +358,7 @@ const STY=[(n,a)=>({tool:n,arguments:a}),(n,a)=>({name:n,arguments:a}),(n,a)=>({
 async function restCall(path,si,n,a){
  const r=await jf(be()+path,{method:'POST',headers:beH(),body:J(STY[si](n,a)),signal:AbortSignal.timeout(600000)},'exec '+n);
  if(r.status===404||r.status===405)throw{nf:1,message:'HTTP '+r.status};
- if(r.status===422){const d=r.json();if((d?.detail||[]).some(x=>x.type==='missing'&&['tool','name','arguments','args','tool_name'].includes(x?.loc?.[1])))throw{ws:1,message:'422 style'};throw new Error('HTTP 422: '+r.text.slice(0,300))}
+ if(r.status===422){const d=r.json();if((d?.detail||[]).some(x=>x.type==='missing'&&x.loc?.length===2&&['tool','name','arguments','args','tool_name'].includes(x.loc[1])))throw{ws:1,message:'422 style'};throw new Error('HTTP 422: '+r.text.slice(0,300))}
  if(!r.ok)throw new Error('HTTP '+r.status+': '+r.text.slice(0,300));return r.text;
 }
 async function mcpCall(n,a){
@@ -413,15 +416,34 @@ async function cLogin(app){
   let n=0;clearInterval(poll);poll=setInterval(async()=>{n++;await cRefresh();if(apSt(app).connected||n>40){clearInterval(poll);pend=null;renderApps();toast(apSt(app).connected?'✅ تم الاتصال':'⌛ انتهت المهلة')}},3000);
  }catch(e){toast('❌ '+e.message)}
 }
+const accSlug=a=>String(a.slug||a.toolkit||a.app||a.toolkit_slug||'').toLowerCase();
+const accActive=a=>a.status==='ACTIVE'||a.status==='active'||a.active===true;
+const accId=a=>a.id||a.connected_account_id||a.nanoid||a.account_id;
+async function cList(){
+ const t=findT(['composio_list_connected_tools'],[['composio','connected']]);if(!t)throw new Error('لا توجد أداة لعرض حسابات Composio على الخادم');
+ const d=await callTool(t,{});return d?.connected_tools||d?.connections||d?.items||(Array.isArray(d)?d:[]);
+}
 async function cLogout(app){
- const t=findT(['composio_delete_connected_account','composio_disconnect_toolkit','composio_revoke_connection'],[['composio','delete','connect'],['composio','disconnect'],['composio','revoke']]);
- if(t){try{await callTool(t,{user_id:cfg.composioUserId,toolkit:app});toast('✅ فُصل الاتصال')}catch(e){toast('⚠️ تعذّر الفصل من الخادم — إيقاف محلي')}}else toast('⚠️ لا أداة فصل — إيقاف محلي');
- const s=apSt(app);s.connected=false;s.enabled=false;persist();renderApps();updCount();
+ try{
+  const rt=findT(['composio_revoke_account'],[['composio','revoke'],['composio','delete','account'],['composio','disconnect']]);
+  if(!rt)throw new Error('لا توجد أداة فصل حسابات على الخادم');
+  toast('⏳ جلب الحسابات...');
+  const mine=(await cList()).filter(a=>accSlug(a)===app&&accActive(a));
+  if(!mine.length){await cRefresh(false);return toast('ℹ️ لا يوجد حساب نشط لهذا التطبيق على الخادم')}
+  const ids=mine.map(accId).filter(Boolean);
+  if(!ids.length)throw new Error('لا يوجد معرّف حساب في رد الخادم: '+J(mine[0]).slice(0,200));
+  const td=tools.find(t=>t.name===rt),pk=Object.keys(td?.parameters?.properties||{}),an=['connected_account_id','account_id','id','nanoid'].find(k=>pk.includes(k))||pk[0]||'connected_account_id',errs=[];
+  toast('⏳ يفصل '+ids.length+' حساب...');
+  for(const id of ids){try{await callTool(rt,{[an]:String(id)})}catch(e){errs.push(e.message)}}
+  await new Promise(r=>setTimeout(r,800));
+  const left=(await cList()).filter(a=>accSlug(a)===app&&accActive(a));
+  if(left.length)throw new Error('بقي الحساب متصلاً على الخادم'+(errs.length?' — '+errs[0]:''));
+  const st=apSt(app);st.connected=false;st.enabled=false;persist();renderApps();updCount();toast('✅ فُصل الحساب من الخادم');
+ }catch(e){toast('❌ '+e.message);cRefresh(false)}
 }
 async function cRefresh(manual){
- const t=findT(['composio_list_connected_tools'],[['composio','connected']]);if(!t){manual&&toast('⚠️ لا أداة لحالة Composio');return}
- try{const d=await callTool(t,{}),it=d?.connected_tools||d?.connections||[];
-  APPS.forEach(a=>apSt(a[0]).connected=it.some(x=>(x.slug||x.toolkit||x.app)===a[0]&&(x.status==='ACTIVE'||x.active===true)));persist();renderApps();manual&&toast('✅ حُدّثت الحالة')}
+ try{const it=await cList();
+  APPS.forEach(a=>apSt(a[0]).connected=it.some(x=>accSlug(x)===a[0]&&accActive(x)));persist();renderApps();manual&&toast('✅ حُدّثت الحالة')}
  catch(e){manual&&toast('❌ '+e.message)}
 }
 
@@ -432,12 +454,12 @@ function loadAll(){
  if(cfg.backend.url==='https://ayb-bh92-tools.hf.space'){cfg.backend.url='https://ayb-bh92-mcp.hf.space';cfg.backend.list=null;cfg.backend.execV2=null}
  if(!cfg.composioUserId)cfg.composioUserId='u_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
  $('cBase').value=cfg.baseUrl;$('cKey').value=cfg.apiKey;$('cAuth').value=cfg.authType||'bearer';$('cTools').value=cfg.backend.url;$('cBeA').value=cfg.backend.authType||'none';$('cBeK').value=cfg.backend.authKey||'';
- $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;$('cStt').value=cfg.sttLang||'ar-SA';$('cRate').value=cfg.ttsRate||1.5;$('rV').textContent=$('cRate').value;$('cVad').checked=cfg.vad!==false;$('cBarge').checked=!!cfg.barge;fillVoices();
+ $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;$('cStt').value=cfg.sttLang||'ar-SA';$('cRate').value=cfg.ttsRate||1.5;$('rV').textContent=$('cRate').value;$('cVad').checked=cfg.vad!==false;$('cBarge').checked=!!cfg.barge;fillVoices();$('cEng').value=cfg.sttEngine||'auto';$('cWm').value=cfg.whisperModel||'Xenova/whisper-base';
  applyTheme();updSpk();renderModels();renderSessions();renderApps();S.length?openSession(S[0].id):newChat();loadTools(false);cRefresh(false);
 }
 function saveSet(){
  cfg.baseUrl=$('cBase').value.trim();cfg.apiKey=$('cKey').value.trim();cfg.authType=$('cAuth').value;cfg.proxyMode=$('cProxy').checked;
- cfg.sysPrompt=$('cSys').value;cfg.temp=$('cTemp').value;cfg.maxTok=$('cMax').value;cfg.topP=$('cTop').value;cfg.autoCont=$('cCont').checked;cfg.sttLang=$('cStt').value;cfg.ttsRate=parseFloat($('cRate').value)||1.5;cfg.ttsVoice=$('cVoice').value;cfg.vad=$('cVad').checked;cfg.barge=$('cBarge').checked;cfg.chatPath=null;
+ cfg.sysPrompt=$('cSys').value;cfg.temp=$('cTemp').value;cfg.maxTok=$('cMax').value;cfg.topP=$('cTop').value;cfg.autoCont=$('cCont').checked;cfg.sttLang=$('cStt').value;cfg.ttsRate=parseFloat($('cRate').value)||1.5;cfg.ttsVoice=$('cVoice').value;cfg.vad=$('cVad').checked;cfg.barge=$('cBarge').checked;cfg.sttEngine=$('cEng').value;if(cfg.whisperModel!==$('cWm').value){cfg.whisperModel=$('cWm').value;W.loading=null;try{W.w&&W.w.terminate()}catch{}W.w=null}cfg.chatPath=null;
  const u=$('cTools').value.trim().replace(/\/+$/,''),at=$('cBeA').value,ak=$('cBeK').value.trim();
  if(u!==cfg.backend.url||at!==cfg.backend.authType||ak!==cfg.backend.authKey){cfg.backend={url:u,authType:at,authKey:ak,list:null,execV2:null};loadTools(false)}
  const cm=$('cCust').value.trim();if(cm){if(!cfg.models.includes(cm))cfg.models.push(cm);cfg.model=cm;$('cCust').value=''}
@@ -564,13 +586,13 @@ function toggleAuto(){
 /* ---- التفريغ الصوتي (Web Speech API في المتصفح) ---- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null,micOn=false,micBase='';
 function micUI(){const b=$('mic');b.classList.toggle('on',micOn);b.innerHTML=svg(micOn?'stop':'mic');b.title=micOn?'إيقاف التفريغ':'تفريغ صوتي';$('inp').placeholder=micOn?'🎤 أستمع... تحدّث الآن':'اكتب رسالتك...'}
-function stopMic(){micOn=false;try{rec&&rec.stop()}catch{}micUI()}
+function stopMic(){micOn=false;try{rec&&rec.stop()}catch{}micEngineStop();micUI()}
 function micStart(){
  micBase=$('inp').value;if(micBase&&!/\s$/.test(micBase))micBase+=' ';
  const r=rec=new SR();r.lang=cfg.sttLang||'ar-SA';r.continuous=false;r.interimResults=true;r.maxAlternatives=1;
  r.onresult=e=>{if(rec!==r||!micOn)return;let t='';for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;$('inp').value=micBase+t;$('inp').dispatchEvent(new Event('input'))};
- r.onerror=e=>{if(rec!==r)return;if(e.error==='no-speech'||e.error==='aborted')return;micOn=false;micUI();toast(sttErr(e.error))};
- let au=0;r.onaudiostart=()=>{au=1};setTimeout(()=>{if(!au&&rec===r&&micOn){micOn=false;try{r.abort()}catch{}micUI();toast(sttErr('network'))}},5000);
+ r.onerror=e=>{if(rec!==r)return;if(e.error==='no-speech'||e.error==='aborted')return;micOn=false;micUI();if((e.error==='network'||e.error==='service-not-allowed')&&cfg.sttEngine!=='browser'){wFallback();return}toast(sttErr(e.error))};
+ let au=0;r.onaudiostart=()=>{au=1};setTimeout(()=>{if(!au&&rec===r&&micOn){micOn=false;try{r.abort()}catch{}micUI();if(cfg.sttEngine!=='browser'){wFallback();return}toast(sttErr('network'))}},5000);
  r.onend=()=>{if(rec!==r)return;if(micOn)setTimeout(()=>{if(micOn&&rec===r){try{micStart()}catch{micOn=false;micUI()}}},150);else micUI()};
  r.start();
 }
@@ -580,34 +602,34 @@ async function ensureMic(){
  catch(e){toast(e.name==='NotAllowedError'||e.name==='SecurityError'?'❌ الإذن مرفوض: اضغط 🔒 بجانب الرابط ← الأذونات ← الميكروفون ← سماح':e.name==='NotFoundError'?'❌ لا يوجد ميكروفون':'❌ '+(e.message||e.name));return false}
 }
 async function toggleMic(){
- if(!SR)return toast('⚠️ المتصفح لا يدعم التفريغ الصوتي (استخدم Chrome أو Edge)');
+ if(!SR&&!useWhisper())return toast('⚠️ المتصفح لا يدعم التفريغ الصوتي');
  if(micOn)return stopMic();
- if(!await ensureMic())return;ttsStop();micOn=true;micUI();try{micStart()}catch(e){micOn=false;micUI();toast('❌ '+e.message)}
+ if(!await ensureMic())return;ttsStop();micOn=true;micUI();if(useWhisper())return wDictStart();try{micStart()}catch(e){micOn=false;micUI();toast('❌ '+e.message)}
 }
 
 /* ---- وضع الدردشة الصوتية (تفريغ + نطق المتصفح، نطق متدفّق جملة بجملة) ---- */
 const V={on:false,state:'',rec:null,text:'',sil:0,chk:0,pend:0,tok:0,spoken:0,done:true,muted:false,wl:null};
 const VOICE_SYS='[وضع محادثة صوتية] أجب كأنك تتحدث: جمل قصيرة طبيعية (٢ إلى ٤ جمل)، بلا قوائم أو عناوين أو رموز تنسيق أو كود أو روابط، وابدأ بالجواب مباشرة دون مقدمة.';
 function pickVoice(t){const ar=(t.match(/[\u0600-\u06FF]/g)||[]).length>(t.match(/[A-Za-z]/g)||[]).length,lg=ar?'ar':'en';if(!hasTTS)return{ar,v:null};const vs=speechSynthesis.getVoices();return{ar,v:vs.find(x=>x.name===cfg.ttsVoice&&x.lang.toLowerCase().startsWith(lg))||vs.find(x=>x.lang.toLowerCase().startsWith(lg))||null}}
-function vSet(st){V.state=st;$('vc').className='on '+st;$('vS').textContent=({listening:'أستمع إليك...',thinking:'أفكّر...',speaking:'أتحدث — المس الدائرة للمقاطعة',muted:'الميكروفون مكتوم'})[st]||''}
+function vSet(st){V.state=st;MIC.paused=st!=='listening';$('vc').className='on '+st;$('vS').textContent=({listening:'أستمع إليك...',thinking:'أفكّر...',speaking:'أتحدث — المس الدائرة للمقاطعة',muted:'الميكروفون مكتوم'})[st]||''}
 async function startVoice(){
- if(!SR||!hasTTS)return toast('⚠️ المتصفح لا يدعم الصوت (استخدم Chrome أو Edge)');
+ if((!SR&&!useWhisper())||!hasTTS)return toast('⚠️ المتصفح لا يدعم الصوت');
  if(!cfg.model||(!cfg.proxyMode&&!cfg.baseUrl)){openSet();return toast('⚠️ أكمل إعداد المزوّد أولاً')}
  if(busy)return toast('⏳ انتظر انتهاء المهمة الحالية');
  const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);
  if(!await ensureMic())return;
  if(micOn)stopMic();ttsStop();
  Object.assign(V,{on:true,muted:false,done:true,pend:0,spoken:0,tok:V.tok+1});$('vMute').innerHTML=svg('mic',22);$('vT').textContent='';$('vR').textContent='';
- try{V.wl=await navigator.wakeLock?.request('screen')}catch{}await vadOpen();
+ try{V.wl=await navigator.wakeLock?.request('screen')}catch{}if(useWhisper()){try{$('vc').className='on thinking';$('vS').textContent='جارٍ تحميل نموذج التفريغ (أول مرة فقط)...';await whisperLoad();if(!V.on)return;await micEngineStart(vWhCb)}catch(e){toast('❌ '+e.message);endVoice();return}}else await vadOpen();
  beep(700,.08);vListen();
 }
 function vListen(re){
- if(!V.on||V.muted||busy&&!re)return;if(!re&&V.state==='listening')return;
+ if(!V.on||V.muted||busy&&!re)return;if(!re&&V.state==='listening')return;if(useWhisper()){V.text='';$('vT').textContent='';vSet('listening');return}
  V.text='';V.heard=false;V.lastVoice=0;if(!re)$('vT').textContent='';vSet('listening');
  const r=V.rec=new SR();r.lang=cfg.sttLang||'ar-SA';r.continuous=false;r.interimResults=true;
  r.onresult=e=>{if(V.rec!==r||V.state!=='listening')return;let t='',fin=false;for(let i=0;i<e.results.length;i++){t+=e.results[i][0].transcript;if(e.results[i].isFinal)fin=true}V.text=t;$('vT').textContent=t;clearTimeout(V.sil);if(fin)vSend();else V.sil=setTimeout(vSend,1100)};
- r.onerror=e=>{if(V.rec!==r)return;if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='audio-capture'&&VAD.st){V.novad=true;vadClose();toast('⚠️ عُطّل استشعار الصوت المتقدم لتعارضه مع الميكروفون');vListen(true);return}toast(sttErr(e.error));endVoice()};
- let au=0;r.onaudiostart=()=>{au=1};setTimeout(()=>{if(!au&&V.rec===r&&V.on&&V.state==='listening'){toast(sttErr('network'));endVoice()}},5000);
+ r.onerror=e=>{if(V.rec!==r)return;if(e.error==='no-speech'||e.error==='aborted')return;if(e.error==='audio-capture'&&VAD.st){V.novad=true;vadClose();toast('⚠️ عُطّل استشعار الصوت المتقدم لتعارضه مع الميكروفون');vListen(true);return}if((e.error==='network'||e.error==='service-not-allowed')&&cfg.sttEngine!=='browser'){vFallback();return}toast(sttErr(e.error));endVoice()};
+ let au=0;r.onaudiostart=()=>{au=1};setTimeout(()=>{if(!au&&V.rec===r&&V.on&&V.state==='listening'){if(cfg.sttEngine!=='browser'){vFallback();return}toast(sttErr('network'));endVoice()}},5000);
  r.onend=()=>{if(V.rec===r&&V.on&&V.state==='listening')setTimeout(()=>{if(V.rec===r&&V.on&&V.state==='listening')vListen(true)},200)};
  try{r.start()}catch{}
 }
@@ -639,7 +661,7 @@ function endVoice(){
  if(!V.on&&!$('vc').classList.contains('on'))return;
  V.on=false;V.tok++;V.pend=0;clearTimeout(V.sil);clearTimeout(V.chk);V.chk=0;
  const r=V.rec;V.rec=null;try{r&&r.abort()}catch{}
- if(hasTTS)speechSynthesis.cancel();try{V.wl&&V.wl.release()}catch{}V.wl=null;vadClose();$('vc').className='';
+ if(hasTTS)speechSynthesis.cancel();try{V.wl&&V.wl.release()}catch{}V.wl=null;vadClose();micEngineStop();$('vc').className='';
 }
 
 let IS_BRAVE=false;if(navigator.brave&&navigator.brave.isBrave)navigator.brave.isBrave().then(b=>IS_BRAVE=b).catch(()=>{});
@@ -668,6 +690,75 @@ function vadLoop(){
  if(!V.on)return;const now=performance.now();
  if(V.state==='listening'){if(VAD.lvl>Math.max(.03,VAD.noise*3)){V.heard=true;V.lastVoice=now}else if(V.heard&&V.text&&now-V.lastVoice>850)vSend()}
  if(V.state==='speaking'&&cfg.barge){if(VAD.lvl>Math.max(.07,VAD.noise*5)){if(++VAD.loud>25){VAD.loud=0;vTap()}}else VAD.loud=0}
+}
+
+async function micTest(){
+ const o=$('mtR'),log=t=>{o.textContent+=t+'\n'};o.textContent='';
+ log('secure='+isSecureContext+'  proto='+location.protocol+'  host='+(location.host||'-'));
+ log('mediaDevices='+!!navigator.mediaDevices+'  SpeechRecognition='+!!SR+'  brave='+IS_BRAVE);
+ try{const p=await navigator.permissions.query({name:'microphone'});log('permission='+p.state)}catch(e){log('permissions API: '+e.message)}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return log('FAIL getUserMedia غير متاح — الصفحة غير آمنة (استخدم https أو localhost)');
+ try{const st=await navigator.mediaDevices.getUserMedia({audio:true});log('OK getUserMedia: '+(st.getAudioTracks()[0]?.label||'mic'));st.getTracks().forEach(t=>t.stop())}
+ catch(e){log('FAIL getUserMedia: '+e.name+' — '+e.message);return}
+ if(!SR)return log('FAIL SpeechRecognition غير موجود');
+ const r=new SR();r.lang=cfg.sttLang||'ar-SA';r.interimResults=true;
+ ['start','audiostart','speechstart','result','error','end'].forEach(ev=>r.addEventListener(ev,e=>log('SR '+ev+(e.error?': '+e.error:'')+(ev==='result'&&e.results[0]?': '+e.results[0][0].transcript:''))));
+ log('تحدّث الآن (8 ثوانٍ)...');try{r.start()}catch(e){log('FAIL start: '+e.message)}setTimeout(()=>{try{r.stop()}catch{}},8000);
+}
+
+/* ---- Whisper محلي عبر Transformers.js (للمتصفحات بدون خدمة تفريغ مثل Brave) ---- */
+let WH_FORCE=false;
+const useWhisper=()=>cfg.sttEngine==='whisper'||(cfg.sttEngine!=='browser'&&(WH_FORCE||IS_BRAVE||!SR));
+const W={w:null,loading:null,id:0,cb:{}},MIC={ctx:null,st:null,pr:null,on:false,chunks:[],pre:[],speech:false,last:0,noise:.008,cb:null,paused:false};
+const whLang=()=>({ar:'arabic',en:'english',fr:'french'})[(cfg.sttLang||'ar').slice(0,2)]||'arabic';
+const WSRC=`import{pipeline,env}from'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+env.allowLocalModels=false;let asr=null,nm='';
+onmessage=async e=>{const m=e.data;try{
+if(m.type==='load'){if(!asr||nm!==m.model){nm=m.model;asr=await pipeline('automatic-speech-recognition',m.model,{progress_callback:p=>postMessage({type:'progress',p})})}postMessage({type:'ready'})}
+else{const o=await asr(m.audio,{language:m.lang,task:'transcribe'});postMessage({type:'text',id:m.id,text:(o.text||'').trim()})}
+}catch(err){postMessage({type:'error',id:m.id,message:String(err&&err.message||err)})}};`;
+function whisperLoad(){
+ if(W.loading)return W.loading;
+ W.loading=new Promise((res,rej)=>{
+  W.w=new Worker(URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'})),{type:'module'});
+  W.w.onmessage=e=>{const m=e.data;
+   if(m.type==='progress'){if(m.p&&m.p.status==='progress'){const t='تحميل نموذج التفريغ '+Math.round(m.p.progress||0)+'%';if(V.on)$('vT').textContent=t;else $('inp').placeholder='⏳ '+t}}
+   else if(m.type==='ready')res();
+   else if(m.type==='text'){const f=W.cb[m.id];delete W.cb[m.id];f&&f(m.text)}
+   else if(m.type==='error'){if(m.id&&W.cb[m.id]){const f=W.cb[m.id];delete W.cb[m.id];toast('❌ Whisper: '+m.message);f('')}else rej(new Error(m.message))}};
+  W.w.onerror=e=>rej(new Error(e.message||'تعذّر تشغيل Worker'));
+  W.w.postMessage({type:'load',model:cfg.whisperModel||'Xenova/whisper-base'});
+ }).catch(e=>{W.loading=null;try{W.w&&W.w.terminate()}catch{}W.w=null;throw e});
+ return W.loading;
+}
+const whisperRun=f=>new Promise(r=>{const id=++W.id;W.cb[id]=r;W.w.postMessage({type:'run',id,audio:f,lang:whLang()},[f.buffer])});
+function toF32(chunks,sr){let n=0;for(const c of chunks)n+=c.length;const a=new Float32Array(n);let o=0;for(const c of chunks){a.set(c,o);o+=c.length}if(sr===16000)return a;const r=sr/16000,m=Math.floor(a.length/r),b=new Float32Array(m);for(let i=0;i<m;i++)b[i]=a[Math.floor(i*r)];return b}
+async function micEngineStart(cb){
+ micEngineStop();MIC.cb=cb;MIC.paused=false;
+ MIC.st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+ const C=window.AudioContext||window.webkitAudioContext;try{MIC.ctx=new C({sampleRate:16000})}catch{MIC.ctx=new C()}
+ const src=MIC.ctx.createMediaStreamSource(MIC.st),pr=MIC.pr=MIC.ctx.createScriptProcessor(4096,1,1);
+ const flush=()=>{const ch=MIC.chunks;MIC.chunks=[];MIC.speech=false;if(ch.length*4096>MIC.ctx.sampleRate*.4)MIC.cb&&MIC.cb(toF32(ch,MIC.ctx.sampleRate))};
+ pr.onaudioprocess=e=>{
+  if(MIC.paused)return;const buf=new Float32Array(e.inputBuffer.getChannelData(0));let q=0;for(let i=0;i<buf.length;i++)q+=buf[i]*buf[i];const rms=Math.sqrt(q/buf.length),now=performance.now();
+  if(V.on)$('orb').style.setProperty('--lv',Math.min(1,rms*7).toFixed(2));
+  if(rms>Math.max(.02,MIC.noise*3)){if(!MIC.speech){MIC.speech=true;MIC.chunks=MIC.pre.slice()}MIC.last=now}else if(!MIC.speech)MIC.noise+=(rms-MIC.noise)*.05;
+  if(MIC.speech){MIC.chunks.push(buf);if(now-MIC.last>900||MIC.chunks.length*4096>MIC.ctx.sampleRate*25)flush()}else{MIC.pre.push(buf);if(MIC.pre.length>3)MIC.pre.shift()}};
+ src.connect(pr);pr.connect(MIC.ctx.destination);MIC.on=true;
+}
+function micEngineStop(){if(!MIC.on&&!MIC.st)return;MIC.on=false;try{if(MIC.pr){MIC.pr.onaudioprocess=null;MIC.pr.disconnect()}}catch{}MIC.st&&MIC.st.getTracks().forEach(t=>t.stop());try{MIC.ctx&&MIC.ctx.close()}catch{}MIC.st=MIC.ctx=MIC.pr=null;MIC.chunks=[];MIC.pre=[];MIC.speech=false}
+async function wDictStart(){
+ micOn=true;micUI();$('inp').placeholder='⏳ تجهيز Whisper (أول مرة يحتاج تحميل النموذج)...';
+ try{await whisperLoad();if(!micOn)return;micUI();
+  await micEngineStart(async f=>{$('inp').placeholder='⏳ جارٍ التفريغ...';const t=await whisperRun(f);if(micOn)$('inp').placeholder='🎤 أستمع... تحدّث الآن';if(t){const v=$('inp').value;$('inp').value=v+(v&&!/\s$/.test(v)?' ':'')+t;$('inp').dispatchEvent(new Event('input'))}})}
+ catch(e){micOn=false;micEngineStop();micUI();toast('❌ تعذّر Whisper: '+e.message+' (يحتاج اتصالاً بـ jsdelivr وhuggingface)')}
+}
+const wFallback=()=>{WH_FORCE=true;toast('↪ تعذّر تفريغ المتصفح — التحويل إلى Whisper المحلي');toggleMic()};
+const vFallback=()=>{WH_FORCE=true;toast('↪ التحويل إلى Whisper المحلي');endVoice();startVoice()};
+async function vWhCb(f){
+ if(!V.on||V.state!=='listening')return;
+ vSet('thinking');$('vT').textContent='...';const t=await whisperRun(f);if(!V.on)return;
+ if(t&&t.trim().length>1){V.state='listening';V.text=t;$('vT').textContent=t;vSend()}else vListen();
 }
 
 /* ---- agent ---- */
