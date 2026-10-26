@@ -451,7 +451,7 @@ async function cRefresh(manual){
 function loadAll(){
  try{const d=JSON.parse(localStorage.getItem(LS)||'{}');const b=cfg.backend;Object.assign(cfg,d.cfg||{});cfg.backend={...b,...(d.cfg?.backend||{})};S=d.sessions||[]}catch{}
  delete cfg.zep;cfg.composio=cfg.composio||{};cfg.enabledToolNames=cfg.enabledToolNames||[];
- if(cfg.backend.url==='https://ayb-bh92-tools.hf.space'){cfg.backend.url='https://ayb-bh92-mcp.hf.space';cfg.backend.list=null;cfg.backend.execV2=null}
+ if(cfg.backend.url==='https://ayb-bh92-tools.hf.space'){cfg.backend.url='https://bahi-bh-test-ckod.hf.space';cfg.backend.list=null;cfg.backend.execV2=null}
  if(!cfg.composioUserId)cfg.composioUserId='u_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
  $('cBase').value=cfg.baseUrl;$('cKey').value=cfg.apiKey;$('cAuth').value=cfg.authType||'bearer';$('cTools').value=cfg.backend.url;$('cBeA').value=cfg.backend.authType||'none';$('cBeK').value=cfg.backend.authKey||'';
  $('cProxy').checked=!!cfg.proxyMode;$('cSys').value=cfg.sysPrompt||'';$('cTemp').value=cfg.temp;$('cMax').value=cfg.maxTok;$('cTop').value=cfg.topP;$('cCont').checked=cfg.autoCont!==false;$('cStt').value=cfg.sttLang||'ar-SA';$('cRate').value=cfg.ttsRate||1.5;$('rV').textContent=$('cRate').value;$('cVad').checked=cfg.vad!==false;$('cBarge').checked=!!cfg.barge;fillVoices();$('cEng').value=cfg.sttEngine||'auto';$('cWm').value=cfg.whisperModel||'Xenova/whisper-base';
